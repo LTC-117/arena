@@ -156,9 +156,11 @@ Region *new_region(size_t capacity)
     // TODO: it would be nice if we could guarantee that the regions are allocated by ARENA_BACKEND_LIBC_MALLOC are page aligned
     Region *r = (Region*)malloc(size_bytes);
     ARENA_ASSERT(r); // TODO: since ARENA_ASSERT is disableable go through all the places where we use it to check for failed memory allocation and return with NULL there.
+
     r->next = NULL;
     r->count = 0;
     r->capacity = capacity;
+
     return r;
 }
 
@@ -175,9 +177,11 @@ Region *new_region(size_t capacity)
     size_t size_bytes = sizeof(Region) + sizeof(uintptr_t) * capacity;
     Region *r = mmap(NULL, size_bytes, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     ARENA_ASSERT(r != MAP_FAILED);
+
     r->next = NULL;
     r->count = 0;
     r->capacity = capacity;
+
     return r;
 }
 
@@ -202,6 +206,7 @@ void free_region(Region *r)
 Region *new_region(size_t capacity)
 {
     SIZE_T size_bytes = sizeof(Region) + sizeof(uintptr_t) * capacity;
+
     Region *r = VirtualAllocEx(
         GetCurrentProcess(),      /* Allocate in current process address space */
         NULL,                     /* Unknown position */
@@ -209,12 +214,14 @@ Region *new_region(size_t capacity)
         MEM_COMMIT | MEM_RESERVE, /* Reserve and commit allocated page */
         PAGE_READWRITE            /* Permissions ( Read/Write )*/
     );
+
     if (INV_HANDLE(r))
         ARENA_ASSERT(0 && "VirtualAllocEx() failed.");
 
     r->next = NULL;
     r->count = 0;
     r->capacity = capacity;
+
     return r;
 }
 
@@ -255,9 +262,11 @@ Region *new_region(size_t capacity)
     // grow memory brk() style
     size_t current_memory_size = ARENA_WASM_PAGE_SIZE * __builtin_wasm_memory_size(0);
     size_t desired_memory_size = (size_t) bump_pointer + size_bytes;
+
     if (desired_memory_size > current_memory_size) {
         size_t delta_bytes = desired_memory_size - current_memory_size;
         size_t delta_pages = (delta_bytes + (ARENA_WASM_PAGE_SIZE - 1))/ARENA_WASM_PAGE_SIZE;
+
         if (__builtin_wasm_memory_grow(0, delta_pages) < 0) {
             ARENA_ASSERT(0 && "memory.grow failed");
             return NULL;
@@ -269,6 +278,7 @@ Region *new_region(size_t capacity)
     r->next = NULL;
     r->count = 0;
     r->capacity = capacity;
+
     return r;
 }
 
@@ -317,18 +327,22 @@ void *arena_alloc(Arena *a, size_t size_bytes)
 
     void *result = &a->end->data[a->end->count];
     a->end->count += size;
+
     return result;
 }
 
 void *arena_realloc(Arena *a, void *oldptr, size_t oldsz, size_t newsz)
 {
     if (newsz <= oldsz) return oldptr;
+
     void *newptr = arena_alloc(a, newsz);
     char *newptr_char = (char*)newptr;
     char *oldptr_char = (char*)oldptr;
+
     for (size_t i = 0; i < oldsz; ++i) {
         newptr_char[i] = oldptr_char[i];
     }
+
     return newptr;
 }
 
@@ -336,6 +350,7 @@ size_t arena_strlen(const char *s)
 {
     size_t n = 0;
     while (*s++) n++;
+
     return n;
 }
 
@@ -344,6 +359,7 @@ void *arena_memcpy(void *dest, const void *src, size_t n)
     char *d = dest;
     const char *s = src;
     for (; n; n--) *d++ = *s++;
+
     return dest;
 }
 
@@ -353,6 +369,7 @@ char *arena_strdup(Arena *a, const char *cstr)
     char *dup = (char*)arena_alloc(a, n + 1);
     arena_memcpy(dup, cstr, n);
     dup[n] = '\0';
+
     return dup;
 }
 
@@ -390,11 +407,12 @@ char *arena_sprintf(Arena *a, const char *format, ...)
 Arena_Mark arena_snapshot(Arena *a)
 {
     Arena_Mark m;
-    if(a->end == NULL){ //snapshot of uninitialized arena
+
+    if(a->end == NULL) { //snapshot of uninitialized arena
         ARENA_ASSERT(a->begin == NULL);
         m.region = a->end;
         m.count  = 0;
-    }else{
+    } else {
         m.region = a->end;
         m.count  = a->end->count;
     }
@@ -413,12 +431,13 @@ void arena_reset(Arena *a)
 
 void arena_rewind(Arena *a, Arena_Mark m)
 {
-    if(m.region == NULL){ //snapshot of uninitialized arena
+    if(m.region == NULL) { //snapshot of uninitialized arena
         arena_reset(a);   //leave allocation
         return;
     }
 
     m.region->count = m.count;
+
     for (Region *r = m.region->next; r != NULL; r = r->next) {
         r->count = 0;
     }
@@ -429,22 +448,26 @@ void arena_rewind(Arena *a, Arena_Mark m)
 void arena_free(Arena *a)
 {
     Region *r = a->begin;
+
     while (r) {
         Region *r0 = r;
         r = r->next;
         free_region(r0);
     }
+
     a->begin = NULL;
     a->end = NULL;
 }
 
 void arena_trim(Arena *a){
     Region *r = a->end->next;
+
     while (r) {
         Region *r0 = r;
         r = r->next;
         free_region(r0);
     }
+
     a->end->next = NULL;
 }
 
