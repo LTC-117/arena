@@ -50,12 +50,10 @@ struct Region {
     Region *next;
     size_t count;
     size_t capacity;
-//#ifdef ARENA_MEM_DEBUG
     uint32_t line;
     char file[256];
     int arena_size;
     uintptr_t data[];
-//#endif
 };
 
 typedef struct {
@@ -478,68 +476,28 @@ void arena_trim(Arena *a){
 }
 
 #ifdef ARENA_MEM_DEBUG
-void *arena_alloc_debug(Arena *a, size_t size_bytes, char* file, int line)
+Region *new_region_debug(size_t capacity, char *file, int line)
 {
-    size_t size = (size_bytes + sizeof(uintptr_t) - 1)/sizeof(uintptr_t);
+    size_t size_bytes = sizeof(Region) + sizeof(uintptr_t)*capacity;
+    // TODO: it would be nice if we could guarantee that the regions are allocated by ARENA_BACKEND_LIBC_MALLOC are page aligned
+    Region *r = (Region*)malloc(size_bytes);
+    ARENA_ASSERT(r); // TODO: since ARENA_ASSERT is disableable go through all the places where we use it to check for failed memory allocation and return with NULL there.
 
-    if (a->end == NULL) {
-        ARENA_ASSERT(a->begin == NULL);
-        size_t capacity = ARENA_REGION_DEFAULT_CAPACITY;
-        if (capacity < size) capacity = size;
-        a->end = new_region(capacity);
-        a->begin = a->end;
-    }
+    r->next = NULL;
+    r->count = 0;
+    r->capacity = capacity;
+    r->line = line;
 
-    while (a->end->count + size > a->end->capacity && a->end->next != NULL) {
-        a->end = a->end->next;
-    }
-
-    if (a->end->count + size > a->end->capacity) {
-        ARENA_ASSERT(a->end->next == NULL);
-        size_t capacity = ARENA_REGION_DEFAULT_CAPACITY;
-        if (capacity < size) capacity = size;
-        a->end->next = new_region(capacity);
-        a->end = a->end->next;
-    }
-
-    void *result = &a->end->data[a->end->count];
-    a->end->count += size;
-
-    return result;
+    return r;
 }
 
-void *arena_realloc_debug(Arena *a, void *oldptr, size_t oldsz, size_t newsz, char *file, int line)
+void free_region_debug(Region *r)
 {
-    if (newsz <= oldsz) return oldptr;
-
-    void *newptr = arena_alloc(a, newsz);
-    char *newptr_char = (char*)newptr;
-    char *oldptr_char = (char*)oldptr;
-
-    for (size_t i = 0; i < oldsz; ++i) {
-        newptr_char[i] = oldptr_char[i];
-    }
-
-    return newptr;
+    free(r);
 }
 
-void arena_free_debug(Arena *a)
-{
-    Region *r = a->begin;
-
-    while (r) {
-        Region *r0 = r;
-        r = r->next;
-        free_region(r0);
-    }
-
-    a->begin = NULL;
-    a->end = NULL;
-}
-
-#define arena_alloc(a, s) arena_alloc_debug(a, s, __FILE__, __LINE__)
-#define arena_realloc(a, p, o, n) arena_realloc_debug(a, p, o, n, __FILE__, __LINE__)
-#define arena_free(a) arena_free_debug(a)
+#define new_region_debug(c) new_region_debug(c, __FILE__, __LINE__)
+#define free_region(r) free_region_debug(r)
 
 #endif // ARENA_MEM_DEBUG
 
