@@ -50,12 +50,12 @@ struct Region {
     Region *next;
     size_t count;
     size_t capacity;
-    uintptr_t data[];
-#ifdef ARENA_MEM_DEBUG
+//#ifdef ARENA_MEM_DEBUG
     uint32_t line;
     char file[256];
     int arena_size;
-#endif
+    uintptr_t data[];
+//#endif
 };
 
 typedef struct {
@@ -488,8 +488,6 @@ void *arena_alloc_debug(Arena *a, size_t size_bytes, char* file, int line)
         if (capacity < size) capacity = size;
         a->end = new_region(capacity);
         a->begin = a->end;
-        a->line = line;
-        a->size = size;
     }
 
     while (a->end->count + size > a->end->capacity && a->end->next != NULL) {
@@ -525,7 +523,6 @@ void *arena_realloc_debug(Arena *a, void *oldptr, size_t oldsz, size_t newsz, ch
     return newptr;
 }
 
-
 void arena_free_debug(Arena *a)
 {
     Region *r = a->begin;
@@ -540,11 +537,9 @@ void arena_free_debug(Arena *a)
     a->end = NULL;
 }
 
-
 #define arena_alloc(a, s) arena_alloc_debug(a, s, __FILE__, __LINE__)
 #define arena_realloc(a, p, o, n) arena_realloc_debug(a, p, o, n, __FILE__, __LINE__)
 #define arena_free(a) arena_free_debug(a)
-
 
 #endif // ARENA_MEM_DEBUG
 
